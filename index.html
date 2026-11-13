@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CARMAR · Cuenta Corriente Empleados</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1d2433;--mut:#6b7385;--line:#e3e6ec;--pri:#13315c;--pri2:#1e4a8a;--acc:#f2a900;--ok:#1b7a43;--bad:#b3261e;--r:12px}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+button,input,select,textarea{font:inherit}
+.top{background:var(--pri);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.top b{font-size:17px}.top .sp{flex:1}.top button{background:transparent;color:#fff;border:1px solid #ffffff55}
+nav{display:flex;gap:4px;flex-wrap:wrap}nav button{border:0;background:transparent;color:#cfd8e6;padding:6px 10px;border-radius:8px;cursor:pointer}
+nav button.on{background:#ffffff22;color:#fff}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.btn{background:var(--pri2);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+.btn.sec{background:#fff;color:var(--pri2);border:1px solid var(--pri2)}.btn.acc{background:var(--acc);color:#222}
+.btn.bad{background:#fff;color:var(--bad);border:1px solid var(--bad)}.btn.sm{padding:4px 9px;font-size:13px}
+button{cursor:pointer}
+input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;width:100%}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+table{width:100%;border-collapse:collapse}th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;text-transform:uppercase;color:var(--mut);font-weight:600}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pos{color:var(--ok)}.neg{color:var(--bad)}.mut{color:var(--mut);font-size:13px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1;min-width:140px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.saldo{font-size:30px;font-weight:700;margin:4px 0}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:#eef1f6;color:var(--mut)}
+.pill.ok{background:#e3f4ea;color:var(--ok)}.pill.warn{background:#fff3d6;color:#8a5a00}
+.mes{font-weight:600;background:#f7f8fb}
+.scroll{overflow-x:auto}
+.login{max-width:380px;margin:60px auto}
+.modal{position:fixed;inset:0;background:#0007;display:flex;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto;z-index:10}
+.modal .card{width:100%;max-width:560px}
+.demo{background:var(--acc);color:#222;text-align:center;font-size:13px;padding:4px}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}.tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:6px 14px}
+.tabs button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.liq input{min-width:110px;text-align:right;padding:5px 7px}
+#print{display:none}
+@media print{body>*:not(#print){display:none!important}#print{display:block}body{background:#fff}}
+.doc{font-family:Georgia,serif;color:#000;padding:10mm 14mm;font-size:13pt;line-height:1.5}
+.doc h2{margin:0;font-size:15pt}.doc .hd{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px}
+.vale{height:138mm;border-bottom:1px dashed #888;padding:8mm 14mm;font-family:Georgia,serif;font-size:12pt;line-height:1.55;color:#000;position:relative}
+.vale:last-child{border-bottom:0}.vale .big{font-size:16pt;font-weight:bold}
+.firmas{display:flex;gap:30px;margin-top:40px}.firmas div{flex:1;border-top:1px solid #000;padding-top:4px;font-size:11pt;text-align:center}
+.copia{position:absolute;top:8mm;right:14mm;font-size:10pt;color:#555}
+@media(max-width:600px){main{padding:10px}.saldo{font-size:26px}td,th{padding:6px 5px}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="print"></div>
+<script>
+/* ============ CONFIGURACIÓN ============
+   Pegá acá la config de tu proyecto Firebase (Consola > Configuración del proyecto > Tus apps > Web).
+   Si apiKey queda vacío, la app corre en MODO DEMO (datos guardados solo en este navegador). */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCo-AHx4CTPERAxEJ7oq9N696nhjTGb8Ug",
+  authDomain: "carmar-apps.firebaseapp.com",
+  databaseURL: "https://carmar-apps-default-rtdb.firebaseio.com",
+  projectId: "carmar-apps",
+  storageBucket: "carmar-apps.firebasestorage.app",
+  messagingSenderId: "261163189274",
+  appId: "1:261163189274:web:3bdfdbe7b8b6bcabb6bda3"
+};
+const EMPRESA = "CARLOS MARTÍN E HIJOS S.A.";
+const EMAIL_DOM = "@empleados.carmar.app"; // dominio ficticio para login por DNI
+const NS = "ccemp/";
+// Administradores: el dueño (OWNER_UID) los da de alta automáticamente en su primer ingreso.
+const OWNER_UID = "zVxXdESqrtO2IMkxeMojvjpWVB92";
+const ADMINS_INICIALES = ["zVxXdESqrtO2IMkxeMojvjpWVB92","07oaOqkkqoTOqVU0Y3z5h6BHTVH3"]; // todo se guarda dentro de este nodo, para convivir con otras apps del mismo proyecto Firebase
+const DEMO = !FIREBASE_CONFIG.apiKey;
+
+/* ============ TIPOS DE MOVIMIENTO ============ */
+const TIPOS = {
+  ini:{l:'Saldo inicial',s:1}, sueldo:{l:'Sueldo',s:1}, adicional:{l:'AD',s:1},
+  sac:{l:'SAC (aguinaldo)',s:1}, vac:{l:'Vacaciones',s:1}, aj:{l:'Ajuste',s:1},
+  anticipo:{l:'Anticipo',s:-1}, ctacte:{l:'Compras Cta Cte',s:-1}
+};
+const ORD = {ini:0,anticipo:1,ctacte:2,sueldo:3,adicional:4,sac:5,vac:6,aj:7};
+const LIQ_TIPOS = ['sueldo','adicional','sac','vac','ctacte'];
+const COM_TIPOS = {
+  vacaciones:{l:'Vacaciones',t:'Por medio de la presente se le notifica que se le otorgan ___ días de vacaciones anuales correspondientes al período ____, a gozar desde el día __/__/____ hasta el día __/__/____ inclusive, debiendo reintegrarse a sus tareas habituales el día __/__/____.'},
+  apercibimiento:{l:'Apercibimiento',t:'Por medio de la presente se le aplica un APERCIBIMIENTO por el siguiente motivo: ____________________. Se le hace saber que la reiteración de conductas de este tipo dará lugar a la aplicación de sanciones disciplinarias de mayor gravedad.'},
+  atencion:{l:'Llamado de atención',t:'Por medio de la presente se le formula un llamado de atención por el siguiente motivo: ____________________. Se le solicita ajustar su conducta a las normas internas de la empresa.'},
+  suspension:{l:'Suspensión',t:'Por medio de la presente se le notifica la aplicación de una SUSPENSIÓN de ___ día/s sin goce de haberes, a cumplir desde el __/__/____ hasta el __/__/____ inclusive, por el siguiente motivo: ____________________. Deberá reintegrarse a sus tareas el día __/__/____.'},
+  horario:{l:'Cambio de horario',t:'Por medio de la presente se le notifica que a partir del día __/__/____ su horario de trabajo será de ____ a ____ hs.'},
+  general:{l:'Notificación general',t:''}
+};
+
+/* ============ UTILIDADES ============ */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>'$ '+(Math.round((+n||0)*100)/100).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const perLabel=p=>{const[y,m]=p.split('-');return MESES[+m-1]+' '+y};
+const pad=n=>String(n).padStart(2,'0');
+const isoD=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const fD=s=>s?s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'';
+const fDLargo=s=>{const d=new Date(s+'T12:00');return d.getDate()+' de '+MESES[d.getMonth()]+' de '+d.getFullYear()};
+const today=()=>isoD(new Date());
+const curPer=()=>today().slice(0,7);
+const addPer=(p,k)=>{let[y,m]=p.split('-').map(Number);m+=k;while(m>12){m-=12;y++}while(m<1){m+=12;y--}return y+'-'+pad(m)};
+const lastDay=p=>{const[y,m]=p.split('-').map(Number);return p+'-'+pad(new Date(y,m,0).getDate())};
+const slug=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const val=m=>(TIPOS[m.t]?.s||1)*(+m.imp||0);
+function sortMovs(arr){return arr.sort((a,b)=>a.per.localeCompare(b.per)||a.f.localeCompare(b.f)||(ORD[a.t]??9)-(ORD[b.t]??9))}
+function saldoDe(movsObj){return Object.values(movsObj||{}).reduce((s,m)=>s+val(m),0)}
+
+function letras(n){
+  n=Math.round(Math.abs(n)*100)/100;const ent=Math.floor(n),cts=Math.round((n-ent)*100);
+  const U=['','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve','veinte','veintiuno','veintidós','veintitrés','veinticuatro','veinticinco','veintiséis','veintisiete','veintiocho','veintinueve'];
+  const D=['','','','treinta','cuarenta','cincuenta','sesenta','setenta','ochenta','noventa'];
+  const C=['','ciento','doscientos','trescientos','cuatrocientos','quinientos','seiscientos','setecientos','ochocientos','novecientos'];
+  const c999=x=>{if(!x)return'';if(x===100)return'cien';const c=Math.floor(x/100),r=x%100;const t=r<30?U[r]:D[Math.floor(r/10)]+(r%10?' y '+U[r%10]:'');return(C[c]+' '+t).trim()};
+  const conv=x=>{if(x===0)return'cero';let s='';const mi=Math.floor(x/1e6),k=Math.floor((x%1e6)/1000),r=x%1000;
+    if(mi)s+=(mi===1?'un millón':conv(mi)+' millones')+' ';if(k)s+=(k===1?'mil':c999(k)+' mil')+' ';if(r)s+=c999(r);return s.trim()};
+  let s=conv(ent).replace(/veintiuno (mil|millones)/g,'veintiún $1').replace(/uno (mil|millones)/g,'un $1');
+  return 'pesos '+s+' con '+pad(cts)+'/100';
+}
+
+/* ============ CAPA DE DATOS (Firebase o demo en memoria) ============ */
+let fb=null,fdb=null;const MEM={};const MEMAUTH={};let memUser=null;
+const DEMO_KEY='carmar_empleados_demo';
+try{const sv=JSON.parse(localStorage.getItem(DEMO_KEY)||'null');if(DEMO&&sv){Object.assign(MEM,sv.mem||{});Object.assign(MEMAUTH,sv.auth||{})}}catch(e){}
+function demoSave(){if(!DEMO)return;try{localStorage.setItem(DEMO_KEY,JSON.stringify({mem:MEM,auth:MEMAUTH}))}catch(e){console.warn('No se pudo guardar demo',e)}}
+function demoReset(){if(!confirm('¿Borrar todos los datos de prueba guardados en este navegador?'))return;try{localStorage.removeItem(DEMO_KEY)}catch(e){}location.reload()}
+if(!DEMO){fb=firebase.initializeApp(FIREBASE_CONFIG);fdb=firebase.database();}
+const P=p=>p.split('/').filter(Boolean);
+const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
+function mget(p){return P(p).reduce((o,k)=>o==null?undefined:o[k],MEM)}
+function mset(p,v){const ks=P(p);let o=MEM;for(let i=0;i<ks.length-1;i++){if(o[ks[i]]==null||typeof o[ks[i]]!=='object')o[ks[i]]={};o=o[ks[i]]}if(v==null)delete o[ks.at(-1)];else o[ks.at(-1)]=clone(v)}
+const DB={
+  async get(p){return DEMO?clone(mget(p)??null):(await fdb.ref(NS+p).get()).val()},
+  async set(p,v){if(DEMO){mset(p,v);demoSave();return}return fdb.ref(NS+p).set(v)},
+  async update(obj){if(DEMO){for(const k in obj)mset(k,obj[k]);demoSave();return}const o={};for(const k in obj)o[NS+k]=obj[k];return fdb.ref().update(o)},
+  key(p){return DEMO?uid():fdb.ref(NS+p).push().key},
+  async nextVale(){if(DEMO){const n=(mget('config/valeSeq')||0)+1;mset('config/valeSeq',n);demoSave();return n}
+    const r=await fdb.ref(NS+'config/valeSeq').transaction(x=>(x||0)+1);return r.snapshot.val()}
+};
+const AUTH={
+  async loginEmp(dni,pin){if(DEMO){const a=MEMAUTH[dni+EMAIL_DOM];if(!a||a.pin!==pin)throw new Error('DNI o PIN incorrecto');memUser={uid:a.uid};return memUser}
+    return (await fb.auth().signInWithEmailAndPassword(dni+EMAIL_DOM,pin)).user},
+  async loginAdmin(email,pass){if(DEMO){if(email==='admin'&&pass==='admin'){memUser={uid:'admin'};MEM.admins={admin:true};return memUser}throw new Error('En demo: usuario admin / clave admin')}
+    return (await fb.auth().signInWithEmailAndPassword(email,pass)).user},
+  async logout(){memUser=null;if(!DEMO)await fb.auth().signOut()},
+  async setAccess(empId,dni,pin,oldPin){
+    const email=dni+EMAIL_DOM;let u;
+    if(DEMO){const a=MEMAUTH[email];u=a?a.uid:uid();MEMAUTH[email]={uid:u,pin};demoSave()}
+    else{const sec=firebase.apps.find(a=>a.name==='sec')||firebase.initializeApp(FIREBASE_CONFIG,'sec');let cred;
+      try{cred=await sec.auth().createUserWithEmailAndPassword(email,pin)}
+      catch(e){if(e.code!=='auth/email-already-in-use')throw e;if(!oldPin)throw new Error('Ese DNI ya tiene cuenta y no hay PIN anterior guardado.');
+        cred=await sec.auth().signInWithEmailAndPassword(email,oldPin);await cred.user.updatePassword(pin)}
+      u=cred.user.uid;await sec.auth().signOut()}
+    await DB.update({['users/'+u]:{emp:empId,dni},['pins/'+empId]:{dni,pin,uid:u}});
+  }
+};
+
+/* ============ ESTADO ============ */
+const S={role:null,emp:null,emps:{},movs:{},leg:{},pins:{},view:'emps',ficha:null,tab:'movs',liqPer:curPer(),imp:null,ad:{cfg:{},tabla:[],mes:{}},adPer:addPer(curPer(),-1),adImp:null,rec:{},recImp:null,ccImp:null};
+
+async function loadAdmin(){
+  const[e,m,l,p,a,rc]=await Promise.all([DB.get('empleados'),DB.get('movs'),DB.get('legajo'),DB.get('pins'),DB.get('ad'),DB.get('recibos')]);S.rec=rc||{};
+  S.emps=e||{};S.movs=m||{};S.leg=l||{};S.pins=p||{};
+  S.ad={cfg:a?.cfg||{},tabla:a?.tabla||TABLA_DEF,mes:a?.mes||{}};
+}
+async function loadEmp(empId){
+  const[e,m,l,rc]=await Promise.all([DB.get('empleados/'+empId),DB.get('movs/'+empId),DB.get('legajo/'+empId),DB.get('recibos/'+empId)]);S.rec={[empId]:rc||{}};
+  S.emps={[empId]:e||{nombre:'?'}};S.movs={[empId]:m||{}};S.leg={[empId]:l||{}};
+}
+
+/* ============ RENDER ============ */
+function render(){
+  const demo=DEMO?'<div class="demo">MODO DEMO — sin Firebase: los datos quedan guardados solo en este navegador · <a href="#" onclick="demoReset();return false">borrar datos de prueba</a></div>':'';
+  if(!S.role){$('#app').innerHTML=demo+viewLogin();return}
+  if(S.role==='emp'){$('#app').innerHTML=demo+`<div class="top"><b>CARMAR</b><span>Mi cuenta</span><span class="sp"></span><button class="btn sm" onclick="logout()">Salir</button></div><main>${viewCuenta(S.emp,false)}</main>`;return}
+  const nav=[['emps','Empleados'],['liq','Liquidación mensual'],['ad','Cálculo AD'],['imp','Importar Excel']].map(([k,l])=>`<button class="${S.view===k&&!S.ficha?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
+  let body='';
+  if(S.ficha)body=viewFicha(S.ficha);else if(S.view==='emps')body=viewEmps();else if(S.view==='liq')body=viewLiq();else if(S.view==='ad')body=viewAD();else body=viewImp();
+  $('#app').innerHTML=demo+`<div class="top"><b>CARMAR · Empleados</b><nav>${nav}</nav><span class="sp"></span><button class="btn sm" onclick="logout()">Salir</button></div><main>${body}</main>`;
+}
+function go(v){S.view=v;S.ficha=null;render()}
+
+function viewLogin(){
+  const adm=S.loginAdmin;
+  return `<div class="login card"><h2 style="margin-top:0">CARMAR</h2><p class="mut">${adm?'Ingreso administrador':'Consultá tu cuenta corriente'}</p>
+  <form onsubmit="doLogin(event)">
+  <label>${adm?'Email':'DNI'}</label><input id="lu" ${adm?'':'inputmode="numeric"'} autocomplete="username" required>
+  <label>${adm?'Contraseña':'PIN'}</label><input id="lp" type="password" ${adm?'':'inputmode="numeric" maxlength="6"'} autocomplete="current-password" required>
+  <div id="lerr" class="neg mut" style="margin-top:8px"></div>
+  <button class="btn" style="width:100%;margin-top:12px">Ingresar</button></form>
+  <p style="text-align:center;margin-bottom:0"><a href="#" onclick="S.loginAdmin=!S.loginAdmin;render();return false" class="mut">${adm?'Soy empleado':'Ingreso administrador'}</a></p></div>`;
+}
+async function doLogin(ev){
+  ev.preventDefault();const u=$('#lu').value.trim(),p=$('#lp').value.trim();$('#lerr').textContent='';
+  try{
+    if(S.loginAdmin){const usr=await AUTH.loginAdmin(u,p);let ok=await DB.get('admins/'+usr.uid);if(!ok&&!DEMO&&usr.uid===OWNER_UID){const a={};ADMINS_INICIALES.forEach(x=>a[x]=true);await DB.update(Object.fromEntries(Object.keys(a).map(k=>['admins/'+k,true])));ok=true}if(!ok){await AUTH.logout();throw new Error('Este usuario no es administrador. Agregá su UID en /ccemp/admins.')}
+      S.role='admin';await loadAdmin()}
+    else{const usr=await AUTH.loginEmp(u.replace(/\D/g,''),p);const map=await DB.get('users/'+usr.uid);if(!map)throw new Error('Cuenta sin empleado asociado');
+      S.role='emp';S.tab='movs';S.emp=map.emp;await loadEmp(map.emp)}
+    render();
+  }catch(e){$('#lerr').textContent=e.code?'DNI/usuario o clave incorrectos':e.message}
+}
+async function logout(){await AUTH.logout();$('#print').innerHTML='';S.tab='movs';S.showAll=false;Object.assign(S,{role:null,loginAdmin:false,emp:null,ficha:null,emps:{},movs:{},leg:{},pins:{}});render()}
+
+/* ---------- Lista de empleados (admin) ---------- */
+function viewEmps(){
+  const ids=Object.keys(S.emps).sort((a,b)=>(S.emps[a].nombre||'').localeCompare(S.emps[b].nombre||''));
+  const act=ids.filter(i=>S.emps[i].activo!==false),inact=ids.filter(i=>S.emps[i].activo===false);
+  const tot=act.reduce((s,i)=>s+saldoDe(S.movs[i]),0);
+  const row=i=>{const e=S.emps[i],s=saldoDe(S.movs[i]);const pend=Object.values(S.leg[i]||{}).filter(c=>c.estado!=='firmada').length;
+    return `<tr><td><a href="#" onclick="openFicha('${i}');return false"><b>${esc(e.nombre)}</b></a><div class="mut">${e.dni?'DNI '+esc(e.dni):'sin DNI'} ${S.pins[i]?'<span class="pill ok">con acceso</span>':''} ${pend?`<span class="pill warn">${pend} sin firmar</span>`:''}</div></td>
+    <td class="n ${s<0?'neg':'pos'}">${fmt(s)}</td><td class="n"><button class="btn sm acc" onclick="modalAnticipo('${i}')">Anticipo</button> <button class="btn sm sec" onclick="openFicha('${i}')">Ver</button></td></tr>`};
+  return `<div class="card"><div class="row"><div><h2 style="margin:0">Empleados</h2><div class="mut">${act.length} activos · saldo total a favor de empleados: <b>${fmt(tot)}</b></div></div>
+  <div style="flex:0"><button class="btn" onclick="modalEmp()">+ Empleado</button></div></div></div>
+  <div class="card scroll"><table><thead><tr><th>Empleado</th><th class="n">Saldo</th><th></th></tr></thead><tbody>${act.map(row).join('')||'<tr><td colspan=3 class="mut">Sin empleados. Importá el Excel o creá uno.</td></tr>'}</tbody></table></div>
+  ${inact.length?`<details class="card"><summary>Inactivos (${inact.length})</summary><table><tbody>${inact.map(row).join('')}</tbody></table></details>`:''}`;
+}
+function openFicha(i){S.ficha=i;S.tab='movs';render();window.scrollTo(0,0)}
+
+/* ---------- Cuenta corriente (empleado y admin) ---------- */
+function viewCuenta(i,admin){
+  const e=S.emps[i]||{},movs=S.movs[i]||{},leg=S.leg[i]||{};
+  const s=saldoDe(movs);
+  const tabs=`<div class="tabs"><button class="${S.tab==='movs'?'on':''}" onclick="S.tab='movs';render()">Movimientos</button><button class="${S.tab==='leg'?'on':''}" onclick="S.tab='leg';render()">Comunicaciones (${Object.keys(leg).length})</button></div>`;
+  const head=`<div class="card"><div class="mut">${admin?'Cuenta de':'Hola,'}</div><h2 style="margin:2px 0">${esc(e.nombre)}</h2>
+   <div class="mut">${s>=0?'Saldo a tu favor (a cobrar)':'Saldo a descontar'}</div><div class="saldo ${s<0?'neg':'pos'}">${fmt(Math.abs(s))}</div>
+   <div class="mut">Positivo: lo que la empresa te debe. Negativo: anticipos que superan lo liquidado.</div></div>`;
+  return head+tabs+(S.tab==='movs'?tablaMovs(i,admin):tablaLeg(i,admin));
+}
+function tablaMovs(i,admin){
+  const arr=sortMovs(Object.entries(S.movs[i]||{}).map(([id,m])=>({id,...m})));
+  if(!arr.length)return '<div class="card mut">Sin movimientos.</div>';
+  let run=0;const byPer={};arr.forEach(m=>{run+=val(m);m.run=run;(byPer[m.per]??=[]).push(m)});
+  const pers=Object.keys(byPer).sort().reverse();
+  const lim=S.showAll?pers:pers.slice(0,6);
+  const html=lim.map(p=>{const ms=byPer[p];const hab=ms.filter(m=>val(m)>0).reduce((a,m)=>a+val(m),0),des=ms.filter(m=>val(m)<0).reduce((a,m)=>a-val(m),0);
+    return `<tr class="mes"><td colspan="${admin?5:4}">${perLabel(p)}</td></tr>`+ms.map(m=>{const v=val(m);
+      return `<tr><td>${fD(m.f)}</td><td>${esc(TIPOS[m.t]?.l||m.t)}${m.c&&m.c!==TIPOS[m.t]?.l?' <span class="mut">· '+esc(m.c)+'</span>':''}${m.vale?` <span class="pill">Vale ${m.vale}</span>`:''}${m.t==='sueldo'&&S.rec[i]?.[m.per]?(r=>`<div class="mut">Recibo: Rem. ${fmt(r.rem)} · No rem. ${fmt(r.norem)} · Retenciones ${fmt(r.ret)} · Neto ${fmt(r.neto)}</div>`)(S.rec[i][m.per]):''}</td>
+      <td class="n ${v<0?'neg':'pos'}">${v<0?'−':'+'} ${fmt(Math.abs(v)).slice(2)}</td><td class="n">${fmt(m.run)}</td>
+      ${admin?`<td class="n">${m.vale?`<button class="btn sm sec" onclick="printVale('${i}','${m.id}')">Vale</button> `:''}<button class="btn sm bad" onclick="delMov('${i}','${m.id}')">✕</button></td>`:''}</tr>`}).join('')
+      +`<tr><td></td><td class="mut">Haberes ${fmt(hab)} · Descuentos ${fmt(des)}</td><td></td><td class="n"><b>${fmt(ms.at(-1).run)}</b></td>${admin?'<td></td>':''}</tr>`}).join('');
+  return `<div class="card scroll"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="n">Importe</th><th class="n">Saldo</th>${admin?'<th></th>':''}</tr></thead><tbody>${html}</tbody></table>
+  ${pers.length>6?`<p><button class="btn sm sec" onclick="S.showAll=!S.showAll;render()">${S.showAll?'Ver menos':'Ver todo el historial ('+pers.length+' meses)'}</button></p>`:''}</div>`;
+}
+function tablaLeg(i,admin){
+  const arr=Object.entries(S.leg[i]||{}).map(([id,c])=>({id,...c})).sort((a,b)=>b.f.localeCompare(a.f));
+  if(!arr.length)return '<div class="card mut">Sin comunicaciones.</div>';
+  return arr.map(c=>`<div class="card"><div class="row"><div><b>${esc(COM_TIPOS[c.tipo]?.l||c.tipo)}</b> <span class="mut">· ${fD(c.f)}</span> ${c.estado==='firmada'?'<span class="pill ok">Notificado/firmado</span>':'<span class="pill warn">Pendiente de firma</span>'}</div>
+    ${admin?`<div style="flex:0;white-space:nowrap"><button class="btn sm sec" onclick="printCom('${i}','${c.id}')">Imprimir</button> <button class="btn sm sec" onclick="toggleFirma('${i}','${c.id}')">${c.estado==='firmada'?'Marcar pendiente':'Marcar firmada'}</button> <button class="btn sm bad" onclick="delCom('${i}','${c.id}')">✕</button></div>`:''}</div>
+    <p style="white-space:pre-wrap;margin-bottom:0">${esc(c.texto)}</p></div>`).join('');
+}
+
+/* ---------- Ficha (admin) ---------- */
+function viewFicha(i){
+  const e=S.emps[i]||{},pin=S.pins[i];
+  return `<p><a href="#" onclick="go('emps');return false">← Empleados</a></p>
+  <div class="card"><div class="row"><div><div class="mut">Legajo ${esc(e.legajo||'-')} · DNI ${esc(e.dni||'sin cargar')} · Ingreso ${fD(e.ingreso)||'-'} ${e.activo===false?'· <b>INACTIVO</b>':''}</div>
+  <div class="mut">Acceso: ${pin?`habilitado (PIN <b>${esc(pin.pin)}</b>)`:'no habilitado'}</div></div></div>
+  <div class="row" style="margin-top:10px"><button class="btn acc" onclick="modalAnticipo('${i}')">Anticipo + vale</button><button class="btn sec" onclick="modalMov('${i}')">Otro movimiento</button>
+  <button class="btn sec" onclick="modalCom('${i}')">Comunicación</button><button class="btn sec" onclick="modalAcceso('${i}')">${pin?'Cambiar PIN':'Dar acceso'}</button><button class="btn sec" onclick="modalEmp('${i}')">Editar datos</button></div></div>
+  ${viewCuenta(i,true)}`;
+}
+
+/* ---------- Modales ---------- */
+function modal(html){const d=document.createElement('div');d.className='modal';d.id='mdl';d.innerHTML=`<div class="card">${html}</div>`;d.onclick=e=>{if(e.target===d)closeM()};document.body.appendChild(d)}
+function closeM(){$('#mdl')?.remove()}
+const empOpts=sel=>Object.entries(S.emps).filter(([,e])=>e.activo!==false).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,e])=>`<option value="${k}" ${k===sel?'selected':''}>${esc(e.nombre)}</option>`).join('');
+
+function modalEmp(i){const e=i?S.emps[i]:{activo:true};
+  modal(`<h3 style="margin-top:0">${i?'Editar':'Nuevo'} empleado</h3><div class="grid2">
+  <div><label>Apellido y nombre</label><input id="e_n" value="${esc(e.nombre||'')}"></div><div><label>DNI</label><input id="e_d" inputmode="numeric" value="${esc(e.dni||'')}"></div>
+  <div><label>N° legajo</label><input id="e_l" value="${esc(e.legajo||'')}"></div><div><label>Fecha de ingreso</label><input id="e_i" type="date" value="${esc(e.ingreso||'')}"></div>
+  <div><label>Estado</label><select id="e_a"><option value="1">Activo</option><option value="0" ${e.activo===false?'selected':''}>Inactivo</option></select></div></div>
+  <div class="row" style="margin-top:14px"><button class="btn" onclick="saveEmp('${i||''}')">Guardar</button><button class="btn sec" onclick="closeM()">Cancelar</button></div>`)}
+async function saveEmp(i){const n=$('#e_n').value.trim();if(!n)return alert('Falta el nombre');
+  const id=i||slug(n)||uid();if(!i&&S.emps[id])return alert('Ya existe un empleado con ese nombre');
+  const e={...(S.emps[id]||{}),nombre:n,dni:$('#e_d').value.replace(/\D/g,''),legajo:$('#e_l').value.trim(),ingreso:$('#e_i').value,activo:$('#e_a').value==='1'};
+  await DB.set('empleados/'+id,e);S.emps[id]=e;closeM();render()}
+
+function modalAnticipo(i){
+  modal(`<h3 style="margin-top:0">Anticipo de haberes</h3><label>Empleado</label><select id="a_e">${empOpts(i)}</select>
+  <div class="grid2"><div><label>Fecha</label><input id="a_f" type="date" value="${today()}"></div><div><label>Importe</label><input id="a_i" type="number" step="0.01" min="0"></div>
+  <div><label>Mes al que se imputa</label><input id="a_p" type="month" value="${curPer()}"></div><div><label>Detalle (opcional)</label><input id="a_c" placeholder="Ej.: efectivo, transferencia"></div></div>
+  <div class="mut" id="a_s" style="margin-top:8px"></div>
+  <div class="row" style="margin-top:14px"><button class="btn acc" onclick="saveAnticipo()">Guardar e imprimir vale</button><button class="btn sec" onclick="closeM()">Cancelar</button></div>`);
+  const upd=()=>{const e=$('#a_e').value;$('#a_s').textContent='Saldo actual: '+fmt(saldoDe(S.movs[e]))};$('#a_e').onchange=upd;upd();
+}
+async function saveAnticipo(){
+  const e=$('#a_e').value,imp=+$('#a_i').value,f=$('#a_f').value,per=$('#a_p').value;if(!(imp>0)||!f||!per)return alert('Completá fecha, importe y mes');
+  const n=await DB.nextVale();const id=DB.key('movs/'+e);const m={t:'anticipo',f,per,imp,c:$('#a_c').value.trim(),vale:n,src:'app'};
+  await DB.set(`movs/${e}/${id}`,m);(S.movs[e]??={})[id]=m;closeM();render();printVale(e,id);
+}
+function modalMov(i){
+  const opts=['ctacte','sueldo','adicional','sac','vac','aj'].map(t=>`<option value="${t}">${TIPOS[t].l}</option>`).join('');
+  modal(`<h3 style="margin-top:0">Otro movimiento</h3><div class="grid2"><div><label>Tipo</label><select id="m_t">${opts}</select></div>
+  <div><label>Fecha</label><input id="m_f" type="date" value="${today()}"></div><div><label>Mes</label><input id="m_p" type="month" value="${curPer()}"></div>
+  <div><label>Importe ${'(en Ajuste: negativo descuenta)'}</label><input id="m_i" type="number" step="0.01"></div></div><label>Detalle</label><input id="m_c">
+  <div class="row" style="margin-top:14px"><button class="btn" onclick="saveMov('${i}')">Guardar</button><button class="btn sec" onclick="closeM()">Cancelar</button></div>`)}
+async function saveMov(i){const t=$('#m_t').value,imp=+$('#m_i').value;if(!imp)return alert('Falta importe');if(t!=='aj'&&imp<0)return alert('El importe va en positivo (solo Ajuste admite negativo)');
+  const id=DB.key('movs/'+i);const m={t,f:$('#m_f').value,per:$('#m_p').value,imp,c:$('#m_c').value.trim(),src:'app'};
+  await DB.set(`movs/${i}/${id}`,m);(S.movs[i]??={})[id]=m;closeM();render()}
+async function delMov(i,id){const m=S.movs[i][id];if(!confirm(`¿Borrar ${TIPOS[m.t]?.l} de ${fmt(m.imp)} (${fD(m.f)})?`))return;
+  await DB.set(`movs/${i}/${id}`,null);delete S.movs[i][id];render()}
+
+function modalCom(i){
+  const opts=Object.entries(COM_TIPOS).map(([k,c])=>`<option value="${k}">${c.l}</option>`).join('');
+  modal(`<h3 style="margin-top:0">Nueva comunicación</h3><div class="grid2"><div><label>Empleado</label><select id="c_e">${empOpts(i)}</select></div>
+  <div><label>Tipo</label><select id="c_t">${opts}</select></div><div><label>Fecha</label><input id="c_f" type="date" value="${today()}"></div></div>
+  <label>Texto (completá los espacios ___)</label><textarea id="c_x" rows="8"></textarea>
+  <div class="row" style="margin-top:14px"><button class="btn" onclick="saveCom()">Guardar e imprimir</button><button class="btn sec" onclick="closeM()">Cancelar</button></div>`);
+  const upd=()=>{$('#c_x').value=COM_TIPOS[$('#c_t').value].t};$('#c_t').onchange=upd;upd();
+}
+async function saveCom(){const e=$('#c_e').value,x=$('#c_x').value.trim();if(!x)return alert('Falta el texto');
+  const id=DB.key('legajo/'+e);const c={tipo:$('#c_t').value,f:$('#c_f').value,texto:x,estado:'pendiente'};
+  await DB.set(`legajo/${e}/${id}`,c);(S.leg[e]??={})[id]=c;closeM();S.tab='leg';render();printCom(e,id)}
+async function toggleFirma(i,id){const c=S.leg[i][id];c.estado=c.estado==='firmada'?'pendiente':'firmada';await DB.set(`legajo/${i}/${id}/estado`,c.estado);render()}
+async function delCom(i,id){if(!confirm('¿Borrar esta comunicación?'))return;await DB.set(`legajo/${i}/${id}`,null);delete S.leg[i][id];render()}
+
+function modalAcceso(i){const e=S.emps[i],p=S.pins[i];const pin=String(Math.floor(100000+Math.random()*900000));
+  modal(`<h3 style="margin-top:0">Acceso de ${esc(e.nombre)}</h3><p class="mut">El empleado entra con su DNI y un PIN de 6 dígitos.</p>
+  <div class="grid2"><div><label>DNI</label><input id="x_d" inputmode="numeric" value="${esc(e.dni||'')}"></div><div><label>PIN (6 dígitos)</label><input id="x_p" inputmode="numeric" maxlength="6" value="${pin}"></div></div>
+  <div id="x_err" class="neg mut"></div><div class="row" style="margin-top:14px"><button class="btn" onclick="saveAcceso('${i}')">Guardar</button><button class="btn sec" onclick="closeM()">Cancelar</button></div>`)}
+async function saveAcceso(i){const dni=$('#x_d').value.replace(/\D/g,''),pin=$('#x_p').value.trim();
+  if(dni.length<7)return $('#x_err').textContent='DNI inválido';if(!/^\d{6}$/.test(pin))return $('#x_err').textContent='El PIN debe tener 6 dígitos';
+  try{const old=S.pins[i]&&S.pins[i].dni===dni?S.pins[i].pin:null;await AUTH.setAccess(i,dni,pin,old);
+    S.pins[i]={dni,pin};if(S.emps[i].dni!==dni){S.emps[i].dni=dni;await DB.set(`empleados/${i}/dni`,dni)}closeM();render();alert(`Listo. ${S.emps[i].nombre}: DNI ${dni} · PIN ${pin}`)}
+  catch(e){$('#x_err').textContent=e.message}}
+
+/* ---------- Liquidación mensual ---------- */
+function viewLiq(){
+  const p=S.liqPer;const ids=Object.keys(S.emps).filter(i=>S.emps[i].activo!==false).sort((a,b)=>S.emps[a].nombre.localeCompare(S.emps[b].nombre));
+  const rows=ids.map(i=>{const ms=Object.values(S.movs[i]||{}).filter(m=>m.per===p);
+    const sum=t=>ms.filter(m=>m.t===t).reduce((a,m)=>a+(+m.imp||0),0);
+    const ant=sum('anticipo');const prev=Object.values(S.movs[i]||{}).filter(m=>m.per<p).reduce((a,m)=>a+val(m),0);
+    return `<tr data-e="${i}"><td><b>${esc(S.emps[i].nombre)}</b><div class="mut">Saldo ant. ${fmt(prev)}</div></td>
+    ${LIQ_TIPOS.map(t=>`<td><input type="number" step="0.01" data-t="${t}" value="${sum(t)||''}" oninput="liqCalc(this)"></td>`).join('')}
+    <td class="n">${fmt(ant)}</td><td class="n" data-r="1" data-prev="${prev}" data-ant="${ant}"></td></tr>`}).join('');
+  setTimeout(()=>document.querySelectorAll('.liq tr[data-e] input').forEach(liqCalc));
+  return `<div class="card"><div class="row"><div><h2 style="margin:0">Liquidación mensual</h2><div class="mut">Cargá recibo, AD, SAC, vacaciones y compras de Cta Cte del mes. Los anticipos se cargan con su vale.</div></div>
+  <div style="flex:0;min-width:170px"><label>Mes</label><input type="month" value="${p}" onchange="S.liqPer=this.value;render()"></div></div></div>
+  <div class="card scroll liq"><table><thead><tr><th>Empleado</th><th>Sueldo (recibo)</th><th>AD</th><th>SAC</th><th>Vacaciones</th><th>Cta Cte</th><th class="n">Anticipos</th><th class="n">A pagar</th></tr></thead><tbody>${rows}</tbody></table>
+  <p><button class="btn" onclick="saveLiq()">Guardar liquidación de ${perLabel(p)}</button></p></div>`;
+}
+function liqCalc(el){const tr=el.closest('tr');const g=t=>+tr.querySelector(`[data-t="${t}"]`).value||0;const r=tr.querySelector('[data-r]');
+  const v=+r.dataset.prev+g('sueldo')+g('adicional')+g('sac')+g('vac')-g('ctacte')-(+r.dataset.ant);r.textContent=fmt(v);r.className='n '+(v<0?'neg':'pos')}
+async function saveLiq(){
+  const p=S.liqPer,up={};
+  document.querySelectorAll('.liq tr[data-e]').forEach(tr=>{const i=tr.dataset.e;const movs=S.movs[i]??={};
+    for(const[id,m]of Object.entries(movs))if(m.per===p&&LIQ_TIPOS.includes(m.t)){up[`movs/${i}/${id}`]=null;delete movs[id]}
+    tr.querySelectorAll('input[data-t]').forEach(inp=>{const v=+inp.value;if(!v)return;const id=DB.key('movs/'+i);
+      const m={t:inp.dataset.t,f:lastDay(p),per:p,imp:v,c:TIPOS[inp.dataset.t].l+' '+perLabel(p),src:'liq'};up[`movs/${i}/${id}`]=m;movs[id]=m})});
+  await DB.update(up);render();alert('Liquidación guardada')}
+
+/* ---------- Importación Excel (hoja "2013") ---------- */
+function viewImp(){
+  const r=S.imp;
+  let res='';
+  if(r){res=`<div class="card"><h3 style="margin-top:0">Vista previa</h3><p>${r.blocks} meses (${perLabel(r.per0)} a ${perLabel(r.perN)}) · ${Object.keys(r.emps).length} empleados · ${r.nMovs} movimientos</p>
+   <p class="${r.bad.length?'neg':'pos'}">${r.bad.length?r.bad.length+' diferencias contra la columna "A Pagar":':'✓ Los saldos calculados coinciden con "A Pagar" en todos los meses.'}</p>
+   ${r.bad.slice(0,15).map(b=>`<div class="mut">${esc(b)}</div>`).join('')}
+   ${r.warn.map(w=>`<div class="mut">⚠ ${esc(w)}</div>`).join('')}
+   <div class="scroll"><table><thead><tr><th>Empleado</th><th class="n">A Pagar ${perLabel(r.perN)}</th><th class="n">Saldo hoy</th><th>Estado</th></tr></thead><tbody>
+   ${Object.entries(r.emps).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,e])=>`<tr><td>${esc(e.nombre)}</td><td class="n">${fmt(e.apFinal)}</td><td class="n">${fmt(r.movs[k].reduce((s,m)=>s+val(m),0))}</td><td>${e.activo?'Activo':'<span class="mut">Inactivo</span>'}</td></tr>`).join('')}</tbody></table></div>
+   <p><button class="btn" onclick="confirmImp()">Importar a la base</button> <span class="mut">Reemplaza solo lo importado antes desde Excel; no toca anticipos, vales ni comunicaciones cargados en la app.</span></p></div>`}
+  const hist=`<div class="card"${!Object.keys(S.emps).length?' style="border:2px solid var(--acc)"':''}><h2 style="margin-top:0">${!Object.keys(S.emps).length?'Paso 1 · ':''}Carga histórica (planilla de sueldos)</h2><p class="mut">Subí el .xls con la hoja <b>"2013"</b> (bloques mensuales: Empleado · Recibo · Comisión · SAC/Vacaciones · anticipos por fecha · Cta Cte · Total Anticipos · A Pagar). La columna Comisión se importa como <b>AD</b>.</p>
+  <input type="file" accept=".xls,.xlsx" onchange="readImp(this.files[0])"><div id="imp_msg" class="mut" style="margin-top:8px"></div></div>${res}`;
+  return Object.keys(S.emps).length?viewRecImp()+viewCCImp()+hist:hist+viewRecImp()+viewCCImp();
+}
+async function readImp(file){if(!file)return;$('#imp_msg').textContent='Leyendo...';
+  try{const buf=await file.arrayBuffer();S.imp=parsePlanilla(buf);render()}catch(e){$('#imp_msg').textContent='Error: '+e.message;console.error(e)}}
+function hdrDate(v){
+  if(v instanceof Date){const d=new Date(v.getTime()+12*3600e3);return isoD(d)}
+  if(typeof v==='string'){const m=v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return m[3]+'-'+pad(m[2])+'-'+pad(m[1])}
+  return null;
+}
+const normH=s=>String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+function parsePlanilla(buf){
+  const wb=XLSX.read(buf,{type:'array',cellDates:true});const ws=wb.Sheets['2013'];if(!ws)throw new Error('No encuentro la hoja "2013"');
+  const A=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+  let hr=A.findIndex(r=>r&&r.some(v=>typeof v==='string'&&normH(v)==='empleado'));if(hr<0)throw new Error('No encuentro la fila de encabezados');
+  const H=A[hr];const starts=[];H.forEach((v,c)=>{if(typeof v==='string'&&normH(v)==='empleado')starts.push(c)});
+  const warn=[];
+  const blocks=starts.map((s,bi)=>{const e=bi+1<starts.length?starts[bi+1]:H.length;const cols=[];let after=false;
+    for(let c=s+1;c<e;c++){const h=H[c];if(h==null||h==='')continue;const d=hdrDate(h);
+      if(d){const det=typeof h==='string'?h.trim().replace(/^\d{1,2}\/\d{1,2}\/\d{4}\s*/,''):'';cols.push({c,k:'anticipo',f:d,next:after,det});continue}
+      const n=normH(h);
+      if(n==='recibo')cols.push({c,k:'sueldo'});else if(n.startsWith('comision'))cols.push({c,k:'adicional'});else if(n==='sac')cols.push({c,k:'sac'});
+      else if(n.startsWith('vacacion'))cols.push({c,k:'vac'});else if(n==='cta cte')cols.push({c,k:'ctacte'});else if(n==='a pagar'){cols.push({c,k:'ap'});after=true}
+      else if(n.startsWith('total anti')){}else warn.push(`Columna "${h}" ignorada (bloque ${bi+1})`)}
+    return{s,cols}});
+  // período base: mes de la última fecha de anticipo del primer bloque
+  const f0=blocks[0].cols.filter(x=>x.k==='anticipo'&&!x.next).map(x=>x.f).sort().at(-1);if(!f0)throw new Error('No pude determinar el mes inicial');
+  const per0=f0.slice(0,7);
+  const emps={},movs={},bad=[];let nMovs=0;
+  const num=v=>typeof v==='number'?v:(typeof v==='string'&&v.trim()!==''&&!isNaN(+v)?+v:null);
+  blocks.forEach((b,bi)=>{const per=addPer(per0,bi);
+    for(let r=hr+1;r<A.length;r++){const row=A[r];if(!row)continue;const name=row[b.s];if(typeof name!=='string'||!name.trim())continue;
+      const nm=name.trim().replace(/\s+/g,' ');const id=slug(nm);if(!id)continue;
+      const isNew=!emps[id];const e=emps[id]??={nombre:nm,ap:null,activo:false};e.nombre=nm;const list=movs[id]??=[];
+      let net=0,ap=null;const add=[];
+      for(const x of b.cols){const v=num(row[x.c]);if(x.k==='ap'){ap=v;continue}if(v==null||v===0)continue;
+        const t=x.k;const p=x.next?addPer(per,1):per;const f=t==='anticipo'?x.f:lastDay(per);
+        if(!x.next)net+=TIPOS[t].s*v;add.push({t,f,per:p,imp:v,c:t==='anticipo'?(x.det||''):TIPOS[t].l+' '+perLabel(per),src:'xls'})}
+      if(isNew){const ini=(ap??0)-net;if(Math.abs(ini)>0.005)list.push({t:'ini',f:lastDay(addPer(per,-1)),per:addPer(per,-1),imp:Math.round(ini*100)/100,c:'Saldo inicial',src:'xls'})}
+      list.push(...add);
+      const calc=list.filter(m=>m.per<=per).reduce((s,m)=>s+val(m),0);
+      if(ap!=null&&Math.abs(calc-ap)>1)bad.push(`${nm} · ${perLabel(per)}: calculado ${fmt(calc)} vs A Pagar ${fmt(ap)}`);
+      if(ap!=null)e.apFinal=ap;
+      if(bi===blocks.length-1)e.activo=add.some(m=>m.t==='sueldo');
+    }});
+  for(const k in movs)nMovs+=movs[k].length;
+  return{blocks:blocks.length,per0,perN:addPer(per0,blocks.length-1),emps,movs,bad,warn,nMovs};
+}
+async function confirmImp(){const r=S.imp;if(!confirm(`Importar ${r.nMovs} movimientos de ${Object.keys(r.emps).length} empleados?`))return;
+  const up={};
+  for(const[k,e]of Object.entries(r.emps)){const cur=S.emps[k];
+    if(cur){if(cur.nombre!==e.nombre)up[`empleados/${k}/nombre`]=e.nombre}else up[`empleados/${k}`]={nombre:e.nombre,activo:e.activo};
+    for(const[id,m]of Object.entries(S.movs[k]||{}))if(m.src==='xls')up[`movs/${k}/${id}`]=null;
+    for(const m of r.movs[k])up[`movs/${k}/${DB.key('movs/'+k)}`]=m}
+  await DB.update(up);await loadAdmin();S.imp=null;S.view='emps';render();alert('Importación completa')}
+
+/* ---------- Impresión ---------- */
+function doPrint(html){$('#print').innerHTML=html;setTimeout(()=>window.print(),100)}
+function printVale(i,id){const e=S.emps[i],m=S.movs[i][id];
+  const one=lbl=>`<div class="vale"><div class="hd" style="display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px"><div><b>${EMPRESA}</b><br><span style="font-size:10pt">San Juan · ${lbl}</span></div>
+  <div style="text-align:right"><span class="big">VALE N° ${String(m.vale).padStart(6,'0')}</span><br>Fecha: ${fD(m.f)}</div></div>
+  <p>Recibí de <b>${EMPRESA}</b> la suma de <span class="big">${fmt(m.imp)}</span><br>(Son ${letras(m.imp)})<br>
+  en concepto de <b>ANTICIPO DE HABERES</b> correspondiente al mes de <b>${perLabel(m.per)}</b>, autorizando su descuento de mis haberes.${m.c?'<br>Detalle: '+esc(m.c):''}</p>
+  <div class="firmas"><div>Firma del empleado</div><div>Aclaración: ${esc(e.nombre)}</div><div>DNI: ${esc(e.dni||'')}</div></div></div>`;
+  doPrint(one('ORIGINAL - Empresa')+one('DUPLICADO - Empleado'))}
+function printCom(i,id){const e=S.emps[i],c=S.leg[i][id];
+  doPrint(`<div class="doc"><div class="hd"><div><h2>${EMPRESA}</h2></div><div>San Juan, ${fDLargo(c.f)}</div></div>
+  <p>Sr./Sra.: <b>${esc(e.nombre)}</b><br>DNI: ${esc(e.dni||'__________')}${e.legajo?' · Legajo N° '+esc(e.legajo):''}</p>
+  <p><b>Ref.: ${esc(COM_TIPOS[c.tipo]?.l||c.tipo).toUpperCase()}</b></p><p style="white-space:pre-wrap;text-align:justify">${esc(c.texto)}</p><p>Queda Ud. debidamente notificado/a.</p>
+  <div class="firmas" style="margin-top:70px"><div>Firma y sello del empleador</div></div>
+  <p style="margin-top:50px"><b>NOTIFICADO/A:</b></p><div class="firmas" style="margin-top:50px"><div>Firma del empleado</div><div>Aclaración</div><div>Fecha</div></div></div>`)}
+
+/* ============ IMPORTAR LIQUIDACIÓN DEL CONTADOR (ej. "septiembre 2026.xlsx") ============
+   Columnas: Liquidación · Fec Liquidación · Legajos · Nombre y Apellido · Tipo de Doc · Documento · C.U.I.L. · ... · Remunerativos · No Remunerativos · Retenciones · Importe
+   Importe (neto) = Sueldo del mes → va a la cuenta corriente y es la base del Cálculo AD. */
+const toks=n=>slug(n).split('-').filter(t=>t.length>2);
+function matchEmp(nombre,dni){
+  if(dni){const f=Object.keys(S.emps).find(i=>S.emps[i].dni===dni);if(f)return f}
+  const t=toks(nombre);if(!t.length)return '';
+  const c=Object.keys(S.emps).filter(i=>toks(S.emps[i].nombre)[0]===t[0]&&!S.emps[i].dni);
+  if(c.length===1)return c[0];
+  const c2=c.filter(i=>toks(S.emps[i].nombre).slice(1).some(x=>t.slice(1).includes(x)));
+  return c2.length===1?c2[0]:'';
+}
+function viewRecImp(){
+  const r=S.recImp;let prev='';
+  if(r){const opts=sel=>`<option value="">— No importar —</option><option value="__new" ${sel==='__new'?'selected':''}>+ Crear empleado nuevo</option>`+Object.entries(S.emps).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,e])=>`<option value="${k}" ${k===sel?'selected':''}>${esc(e.nombre)}${e.dni?' ('+e.dni+')':''}</option>`).join('');
+    prev=(!Object.keys(S.emps).length?`<p class="neg">⚠ Todavía no hay empleados cargados en la app, por eso la lista solo ofrece "Crear empleado nuevo". Lo recomendable es subir primero la <b>Carga histórica</b> (Planilla de Sueldos) para que cada recibo se una a la cuenta corriente que ya tiene. Si seguís igual, se crean empleados nuevos sin historial.</p>`:'')+`<h3>Liquidación de ${perLabel(r.per)} · ${r.rows.length} recibos · total neto ${fmt(r.rows.reduce((a,x)=>a+x.neto,0))}</h3>
+    <div class="scroll liq"><table><thead><tr><th>En el archivo</th><th class="n">Rem.</th><th class="n">No rem.</th><th class="n">Retenc.</th><th class="n">Neto (sueldo)</th><th>Empleado en la app</th><th class="n">Sueldo hoy en la app</th></tr></thead><tbody>
+    ${r.rows.map((x,k)=>{const cur=x.emp&&x.emp!=='__new'?sueldoDe(x.emp,r.per):0;return `<tr><td><b>${esc(x.nombre)}</b><div class="mut">Leg. ${esc(x.legajo)} · DNI ${esc(x.dni)}</div></td><td class="n">${fmt(x.rem)}</td><td class="n">${fmt(x.norem)}</td><td class="n">${fmt(x.ret)}</td><td class="n"><b>${fmt(x.neto)}</b></td>
+      <td><select onchange="S.recImp.rows[${k}].emp=this.value;render()">${opts(x.emp)}</select></td><td class="n ${cur&&Math.abs(cur-x.neto)>0.5?'neg':'mut'}">${cur?fmt(cur):'-'}</td></tr>`}).join('')}</tbody></table></div>
+    <p class="mut">Al importar: el neto se carga como <b>Sueldo</b> de ${perLabel(r.per)} (reemplaza el que haya), se guarda el detalle del recibo, y se completan DNI, legajo y CUIL del empleado. Los próximos meses se reconocen solos por DNI.</p>
+    <button class="btn" onclick="recConfirm()">Importar ${r.rows.filter(x=>x.emp).length} recibos</button> <button class="btn sec" onclick="S.recImp=null;render()">Cancelar</button>`}
+  return `<div class="card"><h2 style="margin-top:0">Importar liquidación del mes</h2><p class="mut">El Excel que te pasan con los sueldos (Legajo · Nombre · Documento · Remunerativos · No Remunerativos · Retenciones · Importe). Carga el sueldo de cada empleado y queda listo para el Cálculo AD.</p>
+  <input type="file" accept=".xlsx,.xls" onchange="recRead(this.files[0])"><div id="rec_msg" class="mut" style="margin-top:8px"></div>${prev}</div>`;
+}
+async function recRead(file){if(!file)return;
+  try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});let rows=null,hdr=-1,A;
+    for(const sn of wb.SheetNames){A=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});hdr=A.findIndex(r=>r&&r.some(v=>typeof v==='string'&&normH(v)==='importe')&&r.some(v=>typeof v==='string'&&normH(v).startsWith('documento')));if(hdr>=0)break}
+    if(hdr<0)throw new Error('No encuentro las columnas "Documento" e "Importe"');
+    const H=A[hdr].map(v=>v==null?'':normH(v));const ci=f=>H.findIndex(f);
+    const C={fec:ci(h=>h.startsWith('fec')),leg:ci(h=>h.startsWith('legajo')),nom:ci(h=>h.startsWith('nombre')),dni:ci(h=>h.startsWith('documento')),cuil:ci(h=>h.startsWith('c.u.i.l')||h==='cuil'),
+      rem:ci(h=>h==='remunerativos'),norem:ci(h=>h.startsWith('no remun')),ret:ci(h=>h.startsWith('retenc')),neto:ci(h=>h==='importe'),liq:ci(h=>h==='liquidacion')};
+    const num=v=>typeof v==='number'?v:(+String(v??'').replace(/\./g,'').replace(',','.')||0);
+    let per=null;rows=[];
+    for(let r=hdr+1;r<A.length;r++){const x=A[r];if(!x||!x[C.nom])continue;
+      if(!per){const d=hdrDate(x[C.fec]);if(d)per=d.slice(0,7)}
+      if(C.liq>=0&&typeof x[C.liq]==='string'&&/aguinaldo|sac/i.test(x[C.liq]))rows.sac=true;
+      const dni=String(x[C.dni]??'').replace(/\D/g,'');
+      const vacio=!Object.keys(S.emps).length,esMartin=/^martin\b/i.test(normH(String(x[C.nom])));rows.push({nombre:String(x[C.nom]).trim(),legajo:String(x[C.leg]??''),dni,cuil:String(x[C.cuil]??''),rem:num(x[C.rem]),norem:num(x[C.norem]),ret:num(x[C.ret]),neto:num(x[C.neto]),emp:vacio?(esMartin?'':'__new'):matchEmp(String(x[C.nom]),dni)})}
+    if(!per)per=prompt('No encontré la fecha de liquidación. Mes (AAAA-MM):',addPer(curPer(),-1));if(!/^\d{4}-\d{2}$/.test(per||''))throw new Error('Mes inválido');
+    S.recImp={per,rows};render();
+    if(rows.sac)alert('Ojo: el archivo parece de aguinaldo (SAC). Se importa como Sueldo; si es SAC, cargalo como SAC desde "Otro movimiento".');
+  }catch(e){$('#rec_msg').textContent='Error: '+e.message;console.error(e)}}
+async function recConfirm(){const r=S.recImp,per=r.per,up={};let n=0;
+  for(const x of r.rows){if(!x.emp)continue;let i=x.emp;
+    if(i==='__new'){i=slug(x.nombre);if(S.emps[i])i+='-'+x.dni;S.emps[i]={nombre:x.nombre,activo:true};up[`empleados/${i}/nombre`]=x.nombre;up[`empleados/${i}/activo`]=true}
+    const e=S.emps[i];
+    if(x.dni&&e.dni!==x.dni){e.dni=x.dni;up[`empleados/${i}/dni`]=x.dni}
+    if(x.legajo&&e.legajo!==x.legajo){e.legajo=x.legajo;up[`empleados/${i}/legajo`]=x.legajo}
+    if(x.cuil&&e.cuil!==x.cuil){e.cuil=x.cuil;up[`empleados/${i}/cuil`]=x.cuil}
+    const movs=S.movs[i]??={};for(const[id,m]of Object.entries(movs))if(m.per===per&&m.t==='sueldo'){up[`movs/${i}/${id}`]=null;delete movs[id]}
+    const id=DB.key('movs/'+i);const m={t:'sueldo',f:lastDay(per),per,imp:x.neto,c:'Sueldo '+perLabel(per),src:'recibo'};up[`movs/${i}/${id}`]=m;movs[id]=m;
+    const rc={rem:x.rem,norem:x.norem,ret:x.ret,neto:x.neto,legajo:x.legajo};up[`recibos/${i}/${per}`]=rc;(S.rec[i]??={})[per]=rc;n++}
+  await DB.update(up);S.recImp=null;render();alert(`${n} sueldos de ${perLabel(per)} importados. Ya podés hacer el Cálculo AD de ese mes.`)}
+
+/* ============ IMPORTAR CUENTAS CORRIENTES (Cuentas Corrientes.xls, una hoja por mes) ============
+   Columnas: Nº CLIENTE · PERSONAL · materiales · CIN (descuento) · Recibo  → "Recibo" es lo que se descuenta del sueldo. */
+const MES_IDX={ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,set:9,oct:10,nov:11,dic:12};
+function perDeTexto(t){t=normH(t||'');const m=t.match(/(ene|feb|mar|abr|may|jun|jul|ago|sep|set|oct|nov|dic)[a-z]*\s*(\d{2,4})/);if(!m)return null;let y=+m[2];if(y<100)y+=2000;return y+'-'+pad(MES_IDX[m[1]])}
+function ccHoja(wb,sn){
+  const A=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null});
+  const hr=A.findIndex(r=>r&&r.some(v=>typeof v==='string'&&normH(v)==='recibo')&&r.some(v=>typeof v==='string'&&normH(v).startsWith('personal')));if(hr<0)return null;
+  const H=A[hr].map(v=>v==null?'':normH(v));const c={cli:H.findIndex(h=>h.includes('cliente')),nom:H.findIndex(h=>h.startsWith('personal')),mat:H.findIndex(h=>h.startsWith('material')),rec:H.findIndex(h=>h==='recibo')};
+  const titulo=(A.slice(0,hr).flat().find(v=>typeof v==='string'&&perDeTexto(v)))||'';
+  const rows=[];for(let r=hr+1;r<A.length;r++){const x=A[r];if(!x||typeof x[c.nom]!=='string')continue;rows.push({cli:String(x[c.cli]??'').trim(),nombre:x[c.nom].trim(),mat:+x[c.mat]||0,rec:+x[c.rec]||0})}
+  return{titulo,per:perDeTexto(titulo)||perDeTexto(sn),rows};
+}
+function ccMatch(row){
+  const byCli=Object.keys(S.emps).find(i=>(S.emps[i].clientes||[]).includes(row.cli));if(row.cli&&byCli)return byCli;
+  if(/^martin\b/i.test(normH(row.nombre)))return '';
+  const base=row.nombre.replace(/\(.*?\)/g,'').replace(/\binfo(rmatica)?\b/ig,'');
+  const zs=a=>a.map(x=>x.replace(/z/g,'s'));const t=zs(toks(base));if(!t.length)return '';const T=i=>zs(toks(S.emps[i].nombre));
+  const c=Object.keys(S.emps).filter(i=>T(i)[0]===t[0]);
+  if(c.length===1)return c[0];
+  if(c.length){const c2=c.filter(i=>T(i).slice(1).some(x=>t.slice(1).includes(x)));return c2.length===1?c2[0]:''}
+  const c3=Object.keys(S.emps).filter(i=>T(i).slice(1).some(x=>t.slice(1).includes(x)));return c3.length===1?c3[0]:'';
+}
+function viewCCImp(){
+  const r=S.ccImp;let prev='';
+  if(r){const h=r.hojas[r.sel];const opts=sel=>`<option value="">— No descontar —</option>`+Object.entries(S.emps).sort((a,b)=>a[1].nombre.localeCompare(b[1].nombre)).map(([k,e])=>`<option value="${k}" ${k===sel?'selected':''}>${esc(e.nombre)}</option>`).join('');
+    const vis=h.rows.filter(x=>x.rec);const dsc=x=>x.desc??x.rec;const tot={};vis.forEach(x=>{if(x.emp)tot[x.emp]=(tot[x.emp]||0)+dsc(x)});
+    prev=(!Object.keys(S.emps).length?`<p class="neg">⚠ No hay empleados cargados en la app, por eso no podés elegir a quién descontar. Subí primero la <b>Carga histórica</b> (Planilla de Sueldos) y después volvé a subir este archivo.</p>`:'')+`<div class="grid2" style="margin-top:10px"><div><label>Hoja</label><select onchange="ccSel(this.value)">${r.hojas.map((x,k)=>`<option value="${k}" ${k===r.sel?'selected':''}>${esc(x.sn)}${x.titulo?' · '+esc(x.titulo):''}</option>`).join('')}</select></div>
+      <div><label>Se descuenta en el mes</label><input type="month" value="${r.per}" onchange="S.ccImp.per=this.value;render()"></div></div>
+      ${h.dup?`<p class="neg">⚠ Esta hoja tiene exactamente los mismos importes que "${esc(h.dup)}". ¿Es una copia sin actualizar? Si la importás, se descuenta dos veces lo mismo.</p>`:''}
+      ${h.per&&h.per!==r.per?`<p class="neg">⚠ El título de la hoja dice ${perLabel(h.per)}.</p>`:''}
+      <div class="scroll liq"><table><thead><tr><th>Cuenta</th><th class="n">Materiales</th><th class="n">Según planilla</th><th>A descontar</th><th>Empleado</th><th class="n">Cta Cte hoy en la app</th></tr></thead><tbody>
+      ${vis.map(x=>{const k=h.rows.indexOf(x);const cur=x.emp?Object.values(S.movs[x.emp]||{}).filter(m=>m.per===r.per&&m.t==='ctacte').reduce((a,m)=>a+m.imp,0):0;
+        return `<tr><td><b>${esc(x.nombre)}</b><div class="mut">Cliente ${esc(x.cli)}</div></td><td class="n">${fmt(x.mat)}</td><td class="n">${fmt(x.rec)}</td><td><input type="number" step="0.01" value="${Math.round(dsc(x)*100)/100}" style="min-width:120px;text-align:right${x.desc!=null&&Math.abs(x.desc-x.rec)>0.005?';border-color:var(--acc);background:#fff8e6':''}" onchange="S.ccImp.hojas[${r.sel}].rows[${k}].desc=this.value===''?0:+this.value;render()"></td><td><select onchange="S.ccImp.hojas[${r.sel}].rows[${k}].emp=this.value;render()">${opts(x.emp)}</select></td>
+        <td class="n ${x.emp&&Math.abs(cur-tot[x.emp])>1?'neg':'mut'}">${cur?fmt(cur):'-'}</td></tr>`}).join('')||'<tr><td colspan=6 class="mut">Sin importes en esta hoja.</td></tr>'}</tbody></table></div>
+      <p class="mut">Se carga como <b>Compras Cta Cte</b> de ${perLabel(r.per)} (reemplaza la que haya ese mes). Las cuentas INFO se suman a la del empleado. Las de la familia Martin quedan sin descontar salvo que elijas un empleado. Si no le descontás toda la cuenta a alguien, cambiá el importe en <b>A descontar</b> (0 = no descontar nada); lo que no descuentes sigue como pendiente en su cuenta de cliente y aparece en la planilla del mes siguiente.</p>
+      <button class="btn" onclick="ccConfirm()">Descontar a ${Object.values(tot).filter(v=>v).length} empleados (${fmt(Object.values(tot).reduce((a,b)=>a+b,0))})</button> <button class="btn sec" onclick="S.ccImp=null;render()">Cancelar</button>`}
+  return `<div class="card"><h2 style="margin-top:0">Importar cuentas corrientes</h2><p class="mut">El archivo "Cuentas Corrientes" (una hoja por mes). Toma la columna <b>Recibo</b> de cada cuenta.</p>
+  <input type="file" accept=".xls,.xlsx" onchange="ccRead(this.files[0])"><div id="cc_msg" class="mut" style="margin-top:8px"></div>${prev}</div>`;
+}
+async function ccRead(file){if(!file)return;
+  try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});const hojas=[];
+    for(const sn of wb.SheetNames){const h=ccHoja(wb,sn);if(h&&h.rows.length){h.sn=sn;h.rows.forEach(x=>x.emp=ccMatch(x));hojas.push(h)}}
+    if(!hojas.length)throw new Error('No encontré hojas con columnas PERSONAL y Recibo');
+    const sig=h=>h.rows.map(x=>x.nombre+':'+x.rec.toFixed(2)).join('|');
+    hojas.forEach((h,k)=>{if(k>0&&h.rows.some(x=>x.rec)&&sig(h)===sig(hojas[k-1]))h.dup=hojas[k-1].sn});
+    const sel=hojas.length-1;S.ccImp={hojas,sel,per:hojas[sel].per||addPer(curPer(),-1)};render()}
+  catch(e){$('#cc_msg').textContent='Error: '+e.message;console.error(e)}}
+function ccSel(k){k=+k;const h=S.ccImp.hojas[k];S.ccImp.sel=k;S.ccImp.per=h.per||S.ccImp.per;render()}
+async function ccConfirm(){const r=S.ccImp,h=r.hojas[r.sel],per=r.per;
+  if(h.dup&&!confirm('Esta hoja parece una copia de la anterior. ¿Importar igual?'))return;
+  const by={};h.rows.filter(x=>x.rec&&x.emp).forEach(x=>{(by[x.emp]??=[]).push(x)});const up={};const dsc=x=>x.desc??x.rec;
+  for(const[i,xs]of Object.entries(by)){const movs=S.movs[i]??={};
+    for(const[id,m]of Object.entries(movs))if(m.per===per&&m.t==='ctacte'){up[`movs/${i}/${id}`]=null;delete movs[id]}
+    const imp=Math.round(xs.reduce((a,x)=>a+dsc(x),0)*100)/100,full=xs.reduce((a,x)=>a+x.rec,0),mat=xs.reduce((a,x)=>a+x.mat,0);
+    if(imp){const id=DB.key('movs/'+i);const m={t:'ctacte',f:lastDay(per),per,imp,c:`Compras ${perLabel(per)} (materiales ${fmt(mat)})`+(Math.abs(imp-full)>0.005?` · descuento parcial de ${fmt(full)}`:''),src:'cc'};up[`movs/${i}/${id}`]=m;movs[id]=m}
+    const cl=new Set([...(S.emps[i].clientes||[]),...xs.map(x=>x.cli).filter(Boolean)]);S.emps[i].clientes=[...cl];up[`empleados/${i}/clientes`]=[...cl]}
+  await DB.update(up);S.ccImp=null;render();alert(`Cta Cte de ${perLabel(per)} cargada a ${Object.values(by).filter(xs=>xs.reduce((a,x)=>a+dsc(x),0)).length} empleados.`)}
+
+/* ============ CÁLCULO AD (solo administrador) ============
+   AD = %SueldoNeto × Sueldo(recibo del mes) + %Bolsa × Bolsa(ventas netas del mes) + ajuste manual */
+const TABLA_DEF=[[400e6,2e6],[500e6,2.5e6],[600e6,3e6],[700e6,3.5e6],[800e6,4e6],[900e6,4.5e6],[1000e6,5e6],[1100e6,5.5e6],[1200e6,6e6],[1300e6,6.5e6],[1400e6,7e6],[1500e6,7.5e6]];
+const pct=n=>(Math.round((+n||0)*10000)/100).toLocaleString('es-AR')+'%';
+const nameKey=n=>slug(n).split('-').slice(0,2).join('-');
+function bolsaDe(v){const t=[...S.ad.tabla].sort((a,b)=>a[0]-b[0]);if(!t.length||!v)return 0;if(v<t[0][0])return t[0][1];let b=t[0][1];for(const[u,x]of t)if(v>=u)b=x;return b}
+function cfgDe(i,per){const h=S.ad.cfg[i]||{};const ks=Object.keys(h).filter(k=>k<=per).sort();return ks.length?h[ks.at(-1)]:null}
+function sueldoDe(i,per){return Object.values(S.movs[i]||{}).filter(m=>m.per===per&&m.t==='sueldo').reduce((a,m)=>a+(+m.imp||0),0)}
+function adActual(i,per){return Object.values(S.movs[i]||{}).filter(m=>m.per===per&&m.t==='adicional').reduce((a,m)=>a+(+m.imp||0),0)}
+function calcAD(per){
+  const mes=S.ad.mes[per]||{};const ventas=+mes.ventas||0;const bolsa=bolsaDe(ventas);
+  const ids=Object.keys(S.emps).filter(i=>S.ad.cfg[i]&&cfgDe(i,per)).sort((a,b)=>S.emps[a].nombre.localeCompare(S.emps[b].nombre));
+  const rows=ids.map(i=>{const c=cfgDe(i,per);const su=sueldoDe(i,per);const ps=c.ps*su,pb=c.pb*bolsa;const aj=mes.aj?.[i]||{};
+    const calc=Math.round((ps+pb)*100)/100;const fin=Math.round((calc+(+aj.imp||0))*100)/100;return{i,c,su,ps,pb,calc,aj,fin,cur:adActual(i,per)}});
+  return{ventas,bolsa,rows,sumPb:rows.reduce((a,r)=>a+(+r.c.pb||0),0)};
+}
+function viewAD(){
+  const p=S.adPer,R=calcAD(p),mes=S.ad.mes[p]||{};
+  const tot=k=>R.rows.reduce((a,r)=>a+(+r[k]||0),0);
+  const sinSueldo=R.rows.filter(r=>!r.su).length;
+  const body=R.rows.map(r=>`<tr data-e="${r.i}"><td><b>${esc(S.emps[r.i].nombre)}</b><div class="mut">${pct(r.c.ps)} sueldo · ${pct(r.c.pb)} bolsa</div></td>
+    <td class="n">${r.su?fmt(r.su):'<span class="neg">sin sueldo</span>'}</td><td class="n">${fmt(r.ps)}</td><td class="n">${fmt(r.pb)}</td><td class="n"><b>${fmt(r.calc)}</b></td>
+    <td><input type="number" step="0.01" data-aj value="${r.aj.imp||''}" placeholder="+/-" style="min-width:100px;text-align:right" oninput="adFin(this)"></td>
+    <td><input data-nota value="${esc(r.aj.nota||'')}" placeholder="motivo" style="min-width:130px"></td>
+    <td class="n" data-fin data-calc="${r.calc}"><b>${fmt(r.fin)}</b></td><td class="n ${Math.abs(r.cur-r.fin)>0.5?'neg':'mut'}">${fmt(r.cur)}</td></tr>`).join('');
+  return `<div class="card"><div class="row"><div><h2 style="margin:0">Cálculo AD</h2><div class="mut">Solo administrador. AD = % sueldo × sueldo del recibo + % bolsa × bolsa del mes + ajuste.</div></div>
+   <div style="flex:0;min-width:170px"><label>Mes</label><input type="month" value="${p}" onchange="S.adPer=this.value;render()"></div></div>
+   <div class="grid2" style="margin-top:6px"><div><label>Ventas netas del mes</label><input id="ad_v" type="number" step="0.01" value="${mes.ventas||''}" onchange="adVentas(this.value)"></div>
+   <div><label>Bolsa a repartir</label><div class="saldo" style="font-size:22px">${fmt(R.bolsa)}</div></div></div>
+   ${Math.abs(R.sumPb-1)>0.0001&&R.rows.length?`<p class="neg">⚠ Los % de bolsa suman ${pct(R.sumPb)} (deberían sumar 100%).</p>`:''}
+   ${sinSueldo?`<p class="neg">⚠ ${sinSueldo} empleado/s sin sueldo cargado en la Liquidación de ${perLabel(p)}: cargalo primero allá.</p>`:''}</div>
+  <div class="card scroll liq"><table><thead><tr><th>Empleado</th><th class="n">Sueldo</th><th class="n">Parte sueldo</th><th class="n">Parte bolsa</th><th class="n">Calculado</th><th>Ajuste</th><th>Nota (privada)</th><th class="n">AD final</th><th class="n">En liquidación</th></tr></thead>
+  <tbody>${body||'<tr><td colspan=9 class="mut">Sin porcentajes cargados. Importá COMISIONES.xlsx o cargalos abajo.</td></tr>'}</tbody>
+  <tfoot><tr><th>Totales</th><th class="n">${fmt(tot('su'))}</th><th class="n">${fmt(tot('ps'))}</th><th class="n">${fmt(tot('pb'))}</th><th class="n">${fmt(tot('calc'))}</th><th></th><th></th><th class="n">${fmt(tot('fin'))}</th><th class="n">${fmt(tot('cur'))}</th></tr></tfoot></table>
+  <div class="row" style="margin-top:12px"><button class="btn sec" onclick="adGuardar()">Guardar ajustes</button><button class="btn acc" onclick="adPasar()">Pasar AD a la liquidación de ${perLabel(p)}</button></div></div>
+  ${viewADConfig()}`;
+}
+function adFin(el){const tr=el.closest('tr');const td=tr.querySelector('[data-fin]');td.innerHTML='<b>'+fmt(+td.dataset.calc+(+el.value||0))+'</b>'}
+async function adVentas(v){const p=S.adPer;(S.ad.mes[p]??={}).ventas=+v||0;await DB.set(`ad/mes/${p}/ventas`,+v||0);render()}
+function adLeerAjustes(){const aj={};document.querySelectorAll('.liq tr[data-e]').forEach(tr=>{const v=+tr.querySelector('[data-aj]').value||0,n=tr.querySelector('[data-nota]').value.trim();if(v||n)aj[tr.dataset.e]={imp:v,nota:n}});return aj}
+async function adGuardar(silent){const p=S.adPer,aj=adLeerAjustes();(S.ad.mes[p]??={}).aj=aj;await DB.set(`ad/mes/${p}/aj`,Object.keys(aj).length?aj:null);if(!silent){render();alert('Ajustes guardados')}}
+async function adPasar(){
+  await adGuardar(true);const p=S.adPer,R=calcAD(p);
+  if(R.rows.some(r=>!r.su)&&!confirm('Hay empleados sin sueldo cargado ese mes. ¿Pasar igual?'))return;
+  if(!confirm(`Se reemplaza el AD de ${perLabel(p)} en la cuenta de ${R.rows.length} empleados (total ${fmt(R.rows.reduce((a,r)=>a+r.fin,0))}). ¿Confirmás?`))return;
+  const up={};
+  for(const r of R.rows){const movs=S.movs[r.i]??={};
+    for(const[id,m]of Object.entries(movs))if(m.per===p&&m.t==='adicional'){up[`movs/${r.i}/${id}`]=null;delete movs[id]}
+    if(r.fin){const id=DB.key('movs/'+r.i);const m={t:'adicional',f:lastDay(p),per:p,imp:r.fin,c:'AD '+perLabel(p),src:'ad'};up[`movs/${r.i}/${id}`]=m;movs[id]=m}}
+  up[`ad/mes/${p}/pasado`]=today();await DB.update(up);render();alert('AD pasado a la liquidación')}
+function viewADConfig(){
+  const ids=Object.keys(S.emps).filter(i=>S.emps[i].activo!==false||S.ad.cfg[i]).sort((a,b)=>S.emps[a].nombre.localeCompare(S.emps[b].nombre));
+  const rows=ids.map(i=>{const c=cfgDe(i,'9999-12');const hist=Object.entries(S.ad.cfg[i]||{}).sort().map(([k,v])=>`desde ${perLabel(k)}: ${pct(v.ps)} / ${pct(v.pb)}`).join(' · ');
+    return `<tr data-c="${i}"><td><b>${esc(S.emps[i].nombre)}</b><div class="mut">${hist||'sin %'}</div></td><td><input type="number" step="0.001" data-ps value="${c?Math.round(c.ps*10000)/100:''}" placeholder="%"></td><td><input type="number" step="0.001" data-pb value="${c?Math.round(c.pb*10000)/100:''}" placeholder="%"></td></tr>`}).join('');
+  return `<details class="card"><summary><b>Porcentajes y tabla de bolsa</b></summary>
+   <p class="mut">Los % nuevos rigen desde el mes que elijas; los meses anteriores se siguen calculando con el % viejo.</p>
+   <div class="scroll liq"><table><thead><tr><th>Empleado</th><th>% Sueldo neto</th><th>% Bolsa</th></tr></thead><tbody>${rows}</tbody></table></div>
+   <div class="row" style="margin-top:10px"><div style="flex:0;min-width:170px"><label>Rigen desde</label><input id="cf_d" type="month" value="${S.adPer}"></div><div style="flex:0"><label>&nbsp;</label><button class="btn" onclick="adGuardarCfg()">Guardar porcentajes</button></div></div>
+   <label style="margin-top:16px">Tabla de bolsa (una línea por escalón: ventas desde ; bolsa)</label>
+   <textarea id="cf_t" rows="7">${S.ad.tabla.map(([a,b])=>a+' ; '+b).join('\n')}</textarea>
+   <p class="mut">Si las ventas están por debajo del primer escalón, se usa la bolsa del primer escalón.</p><button class="btn sec" onclick="adGuardarTabla()">Guardar tabla</button>
+   <hr style="border:0;border-top:1px solid var(--line);margin:18px 0"><b>Importar desde COMISIONES.xlsx</b><p class="mut">Toma de la hoja "Calculo": % de cada empleado, tabla de bolsa y ventas netas de cada mes. No toca los AD ya cargados.</p>
+   <input type="file" accept=".xlsx,.xls" onchange="adImport(this.files[0])"><div id="adimp" class="mut" style="margin-top:6px"></div></details>`;
+}
+async function adGuardarCfg(){const d=$('#cf_d').value;if(!d)return alert('Elegí desde qué mes');const up={};let n=0;
+  document.querySelectorAll('tr[data-c]').forEach(tr=>{const i=tr.dataset.c,ps=tr.querySelector('[data-ps]').value,pb=tr.querySelector('[data-pb]').value;if(ps===''&&pb==='')return;
+    const v={ps:(+ps||0)/100,pb:(+pb||0)/100};const prev=cfgDe(i,d);if(prev&&Math.abs(prev.ps-v.ps)<1e-9&&Math.abs(prev.pb-v.pb)<1e-9)return;
+    (S.ad.cfg[i]??={})[d]=v;up[`ad/cfg/${i}/${d}`]=v;n++});
+  if(!n)return alert('No hay cambios');await DB.update(up);render();alert(n+' empleado/s actualizados desde '+perLabel(d))}
+async function adGuardarTabla(){const t=$('#cf_t').value.split('\n').map(l=>l.split(/[;\t]/).map(x=>+String(x).replace(/[^\d.-]/g,''))).filter(r=>r.length>=2&&r[0]>0&&r[1]>0).map(r=>[r[0],r[1]]).sort((a,b)=>a[0]-b[0]);
+  if(!t.length)return alert('Tabla vacía');S.ad.tabla=t;await DB.set('ad/tabla',t);render();alert('Tabla guardada')}
+async function adImport(file){if(!file)return;const msg=$('#adimp');
+  try{const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});const ws=wb.Sheets['Calculo'];if(!ws)throw new Error('No encuentro la hoja "Calculo"');
+    const A=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    const months=[];(A[0]||[]).forEach((v,c)=>{const d=hdrDate(v);if(d)months.push({c,per:d.slice(0,7)})});if(!months.length)throw new Error('No encuentro los meses en la fila 1');
+    const desde=months[0].per;const byKey={};for(const i in S.emps)byKey[nameKey(S.emps[i].nombre)]=i;
+    const up={},sinMatch=[];let ne=0,nv=0;const tabla=[];
+    for(let r=2;r<A.length;r++){const row=A[r]||[];const n=row[0];
+      if(typeof n==='string'&&typeof row[1]==='number'&&typeof row[2]==='number'){const i=byKey[nameKey(n)];if(!i){sinMatch.push(n);continue}
+        if(!S.ad.cfg[i]||!Object.keys(S.ad.cfg[i]).length){const v={ps:row[1],pb:row[2]};(S.ad.cfg[i]??={})[desde]=v;up[`ad/cfg/${i}/${desde}`]=v;ne++}}
+      if(typeof n==='string'&&normH(n)==='ventas netas'){for(let k=r+1;k<A.length;k++){const a=A[k]?.[0],b=A[k]?.[1];if(typeof a==='number'&&typeof b==='number')tabla.push([a,b]);else if(tabla.length)break}
+        for(const m of months){const v=row[m.c+1];if(typeof v==='number'&&v>0){(S.ad.mes[m.per]??={}).ventas=v;up[`ad/mes/${m.per}/ventas`]=v;nv++}}}}
+    if(tabla.length){S.ad.tabla=tabla;up['ad/tabla']=tabla}
+    await DB.update(up);render();
+    alert(`Importado: % de ${ne} empleados (desde ${perLabel(desde)}), ventas de ${nv} meses, tabla de ${tabla.length} escalones.`+(sinMatch.length?`\nSin coincidencia: ${sinMatch.join(', ')}`:''));
+  }catch(e){msg.textContent='Error: '+e.message;console.error(e)}}
+
+render();
+</script>
+</body>
+</html>
