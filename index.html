@@ -46,8 +46,8 @@ td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media print{body>*:not(#print){display:none!important}#print{display:block}body{background:#fff}}
 .doc{font-family:Georgia,serif;color:#000;padding:10mm 14mm;font-size:13pt;line-height:1.5}
 .doc h2{margin:0;font-size:15pt}.doc .hd{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px}
-.vale{height:138mm;border-bottom:1px dashed #888;padding:8mm 14mm;font-family:Georgia,serif;font-size:12pt;line-height:1.55;color:#000;position:relative}
-.vale:last-child{border-bottom:0}.vale .big{font-size:16pt;font-weight:bold}
+.vale{height:90mm;box-sizing:border-box;border-bottom:1px dashed #888;padding:8mm 14mm;font-family:Georgia,serif;font-size:12pt;line-height:1.55;color:#000;position:relative}
+.vale{break-inside:avoid;page-break-inside:avoid}.vale:last-child{border-bottom:0}.vale .big{font-size:16pt;font-weight:bold}
 .firmas{display:flex;gap:30px;margin-top:40px}.firmas div{flex:1;border-top:1px solid #000;padding-top:4px;font-size:11pt;text-align:center}
 .copia{position:absolute;top:8mm;right:14mm;font-size:10pt;color:#555}
 @media(max-width:600px){main{padding:10px}.saldo{font-size:26px}td,th{padding:6px 5px}}
@@ -181,10 +181,10 @@ function render(){
   const demo=DEMO?'<div class="demo">MODO DEMO — sin Firebase: los datos quedan guardados solo en este navegador · <a href="#" onclick="demoReset();return false">borrar datos de prueba</a></div>':'';
   if(!S.role){$('#app').innerHTML=demo+viewLogin();return}
   if(S.role==='emp'){$('#app').innerHTML=demo+`<div class="top"><b>CARMAR</b><span>Mi cuenta</span><span class="sp"></span><button class="btn sm" onclick="logout()">Salir</button></div><main>${viewCuenta(S.emp,false)}</main>`;return}
-  const nav=[['emps','Empleados'],['liq','Liquidación mensual'],['ad','Cálculo AD'],['imp','Importar Excel']].map(([k,l])=>`<button class="${S.view===k&&!S.ficha?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
+  const nav=[['emps','Empleados'],['vales','Vales'],['liq','Liquidación mensual'],['ad','Cálculo AD'],['imp','Importar Excel']].map(([k,l])=>`<button class="${S.view===k&&!S.ficha?'on':''}" onclick="go('${k}')">${l}</button>`).join('');
   let body='';
-  if(S.ficha)body=viewFicha(S.ficha);else if(S.view==='emps')body=viewEmps();else if(S.view==='liq')body=viewLiq();else if(S.view==='ad')body=viewAD();else body=viewImp();
-  $('#app').innerHTML=demo+`<div class="top"><b>CARMAR · Empleados</b><nav>${nav}</nav><span class="sp"></span><button class="btn sm" onclick="logout()">Salir</button></div><main>${body}</main>`;
+  if(S.ficha)body=viewFicha(S.ficha);else if(S.view==='emps')body=viewEmps();else if(S.view==='vales')body=viewVales();else if(S.view==='liq')body=viewLiq();else if(S.view==='ad')body=viewAD();else body=viewImp();
+  $('#app').innerHTML=demo+`<div class="top"><b>CARMAR · Empleados</b><nav>${nav}</nav><span class="sp"></span><button class="btn sm" onclick="logout()">Salir</button></div><main>${body}</main>`;loteTot();
 }
 function go(v){S.view=v;S.ficha=null;render()}
 
@@ -210,19 +210,39 @@ async function doLogin(ev){
 }
 async function logout(){await AUTH.logout();$('#print').innerHTML='';S.tab='movs';S.showAll=false;Object.assign(S,{role:null,loginAdmin:false,emp:null,ficha:null,emps:{},movs:{},leg:{},pins:{}});render()}
 
-/* ---------- Lista de empleados (admin) ---------- */
+/* ---------- Lista de empleados (admin) + carga rápida de anticipos ---------- */
 function viewEmps(){
+  S.lote??={};S.lf??=today();
   const ids=Object.keys(S.emps).sort((a,b)=>(S.emps[a].nombre||'').localeCompare(S.emps[b].nombre||''));
   const act=ids.filter(i=>S.emps[i].activo!==false),inact=ids.filter(i=>S.emps[i].activo===false);
   const tot=act.reduce((s,i)=>s+saldoDe(S.movs[i]),0);
-  const row=i=>{const e=S.emps[i],s=saldoDe(S.movs[i]);const pend=Object.values(S.leg[i]||{}).filter(c=>c.estado!=='firmada').length;
-    return `<tr><td><a href="#" onclick="openFicha('${i}');return false"><b>${esc(e.nombre)}</b></a><div class="mut">${e.dni?'DNI '+esc(e.dni):'sin DNI'} ${S.pins[i]?'<span class="pill ok">con acceso</span>':''} ${pend?`<span class="pill warn">${pend} sin firmar</span>`:''}</div></td>
-    <td class="n ${s<0?'neg':'pos'}">${fmt(s)}</td><td class="n"><button class="btn sm acc" onclick="modalAnticipo('${i}')">Anticipo</button> <button class="btn sm sec" onclick="openFicha('${i}')">Ver</button></td></tr>`};
+  const row=(i,carga)=>{const e=S.emps[i],s=saldoDe(S.movs[i]),L=S.lote[i]||{};const pend=Object.values(S.leg[i]||{}).filter(c=>c.estado!=='firmada').length;
+    return `<tr><td><a href="#" onclick="openFicha('${i}');return false"><b>${esc(e.nombre)}</b></a>${pend?` <span class="pill warn">${pend} sin firmar</span>`:''}</td>
+    <td class="n ${s<0?'neg':'pos'}">${fmt(s)}</td>
+    ${carga?`<td><input class="l_imp" data-e="${i}" type="number" min="0" step="0.01" placeholder="$ 0" value="${L.imp||''}" oninput="loteSet('${i}','imp',this.value)" style="text-align:right;max-width:140px"></td>
+    <td><input class="l_c" data-e="${i}" placeholder="Concepto" value="${esc(L.c||'')}" oninput="loteSet('${i}','c',this.value)"></td>`:''}</tr>`};
   return `<div class="card"><div class="row"><div><h2 style="margin:0">Empleados</h2><div class="mut">${act.length} activos · saldo total a favor de empleados: <b>${fmt(tot)}</b></div></div>
-  <div style="flex:0"><button class="btn" onclick="modalEmp()">+ Empleado</button></div></div></div>
-  <div class="card scroll"><table><thead><tr><th>Empleado</th><th class="n">Saldo</th><th></th></tr></thead><tbody>${act.map(row).join('')||'<tr><td colspan=3 class="mut">Sin empleados. Importá el Excel o creá uno.</td></tr>'}</tbody></table></div>
-  ${inact.length?`<details class="card"><summary>Inactivos (${inact.length})</summary><table><tbody>${inact.map(row).join('')}</tbody></table></details>`:''}`;
+  <div style="flex:none;white-space:nowrap"><button class="btn sm sec" onclick="modalEmp()">+ Empleado</button></div></div>
+  <div class="row" style="margin-top:10px;align-items:flex-end"><div style="flex:none"><label>Fecha de los vales</label><input type="date" value="${S.lf}" onchange="S.lf=this.value"></div>
+  <div><label>Concepto para todos (opcional)</label><input id="l_cg" placeholder="Ej.: efectivo, transferencia"></div>
+  <div style="flex:none"><button class="btn sm sec" onclick="loteCopiar()">Copiar a todos</button></div></div></div>
+  <div class="card scroll"><table><thead><tr><th>Empleado</th><th class="n">Saldo</th><th>Anticipo</th><th>Concepto</th></tr></thead><tbody>${act.map(i=>row(i,true)).join('')||'<tr><td colspan=4 class="mut">Sin empleados. Importá el Excel o creá uno.</td></tr>'}</tbody></table>
+  <div class="row" style="margin-top:12px;align-items:center"><div class="mut" id="l_tot"></div>
+  <div style="flex:none;white-space:nowrap"><button class="btn sm sec" onclick="S.lote={};render()">Limpiar</button> <button class="btn acc" onclick="loteGuardar()">Guardar e imprimir vales</button></div></div></div>
+  ${inact.length?`<details class="card"><summary>Inactivos (${inact.length})</summary><table><tbody>${inact.map(i=>row(i,false)).join('')}</tbody></table></details>`:''}`;
 }
+function loteSet(i,k,v){(S.lote[i]??={})[k]=v;loteTot()}
+function loteTot(){const L=Object.values(S.lote||{}).filter(x=>+x.imp>0);const el=$('#l_tot');if(el)el.innerHTML=L.length?`${L.length} vale${L.length>1?'s':''} · Total <b>${fmt(L.reduce((a,x)=>a+ +x.imp,0))}</b>`:'Cargá el monto al lado de cada empleado.'}
+function loteCopiar(){const c=$('#l_cg').value.trim();document.querySelectorAll('.l_c').forEach(el=>{el.value=c;loteSet(el.dataset.e,'c',c)})}
+async function loteGuardar(){
+  const f=S.lf||today(),per=f.slice(0,7);
+  const L=Object.entries(S.lote||{}).filter(([i,x])=>+x.imp>0&&S.emps[i]).sort((a,b)=>S.emps[a[0]].nombre.localeCompare(S.emps[b[0]].nombre));
+  if(!L.length)return alert('No cargaste ningún monto');
+  if(!confirm(`Se van a generar ${L.length} vale(s) por un total de ${fmt(L.reduce((a,[,x])=>a+ +x.imp,0))} con fecha ${fD(f)}. ¿Confirmás?`))return;
+  const out=[];
+  for(const[e,x]of L){const n=await DB.nextVale();const id=DB.key('movs/'+e);const m={t:'anticipo',f,per,imp:Math.round(+x.imp*100)/100,c:(x.c||'').trim(),vale:n,src:'app'};
+    await DB.set(`movs/${e}/${id}`,m);(S.movs[e]??={})[id]=m;out.push([e,id])}
+  S.lote={};render();printVales(out)}
 function openFicha(i){S.ficha=i;S.tab='movs';render();window.scrollTo(0,0)}
 
 /* ---------- Cuenta corriente (empleado y admin) ---------- */
@@ -290,14 +310,28 @@ function modalAnticipo(i){
   <div class="grid2"><div><label>Fecha</label><input id="a_f" type="date" value="${today()}"></div><div><label>Importe</label><input id="a_i" type="number" step="0.01" min="0"></div>
   <div><label>Mes al que se imputa</label><input id="a_p" type="month" value="${curPer()}"></div><div><label>Detalle (opcional)</label><input id="a_c" placeholder="Ej.: efectivo, transferencia"></div></div>
   <div class="mut" id="a_s" style="margin-top:8px"></div>
-  <div class="row" style="margin-top:14px"><button class="btn acc" onclick="saveAnticipo()">Guardar e imprimir vale</button><button class="btn sec" onclick="closeM()">Cancelar</button></div>`);
+  <div class="row" style="margin-top:14px"><button class="btn acc" onclick="saveAnticipo(false)">Guardar</button><button class="btn sec" onclick="saveAnticipo(true)">Guardar e imprimir vale</button><button class="btn sec" onclick="closeM()">Cancelar</button></div>`);
   const upd=()=>{const e=$('#a_e').value;$('#a_s').textContent='Saldo actual: '+fmt(saldoDe(S.movs[e]))};$('#a_e').onchange=upd;upd();
 }
-async function saveAnticipo(){
+async function saveAnticipo(imprimir){
   const e=$('#a_e').value,imp=+$('#a_i').value,f=$('#a_f').value,per=$('#a_p').value;if(!(imp>0)||!f||!per)return alert('Completá fecha, importe y mes');
   const n=await DB.nextVale();const id=DB.key('movs/'+e);const m={t:'anticipo',f,per,imp,c:$('#a_c').value.trim(),vale:n,src:'app'};
-  await DB.set(`movs/${e}/${id}`,m);(S.movs[e]??={})[id]=m;closeM();render();printVale(e,id);
+  await DB.set(`movs/${e}/${id}`,m);(S.movs[e]??={})[id]=m;closeM();render();if(imprimir)printVale(e,id);
 }
+
+/* ---------- Vales: impresión en lote ---------- */
+function valesLista(){const d=S.vd||today(),h=S.vh||today(),out=[];
+  for(const[i,ms]of Object.entries(S.movs))for(const[id,m]of Object.entries(ms||{}))if(m.vale&&m.f>=d&&m.f<=h)out.push({i,id,m});
+  return out.sort((a,b)=>a.m.vale-b.m.vale)}
+function viewVales(){const L=valesLista();S.vsel??={};
+  const sel=L.filter(x=>S.vsel[x.id]!==false),tot=sel.reduce((a,x)=>a+x.m.imp,0);
+  const rows=L.map(x=>`<tr><td><input type="checkbox" ${S.vsel[x.id]!==false?'checked':''} onchange="S.vsel['${x.id}']=this.checked;render()"></td><td>${String(x.m.vale).padStart(6,'0')}</td><td>${fD(x.m.f)}</td><td>${esc(S.emps[x.i]?.nombre||x.i)}</td><td class="n">${fmt(x.m.imp)}</td><td class="n"><button class="btn sm sec" onclick="printVale('${x.i}','${x.id}')">Imprimir</button></td></tr>`).join('');
+  return `<div class="card"><h2 style="margin:0">Imprimir vales</h2><div class="mut">Elegí el rango de fechas, marcá los vales y se imprimen todos juntos (3 por hoja).</div>
+  <div class="grid2" style="max-width:420px"><div><label>Desde</label><input type="date" value="${S.vd||today()}" onchange="S.vd=this.value;S.vsel={};render()"></div><div><label>Hasta</label><input type="date" value="${S.vh||today()}" onchange="S.vh=this.value;S.vsel={};render()"></div></div>
+  <div class="row" style="margin-top:12px"><button class="btn acc" onclick="printVales(valesLista().filter(x=>S.vsel[x.id]!==false).map(x=>[x.i,x.id]))">Imprimir seleccionados (${sel.length})</button>
+  <button class="btn sm sec" onclick="valesLista().forEach(x=>S.vsel[x.id]=true);render()">Marcar todos</button><button class="btn sm sec" onclick="valesLista().forEach(x=>S.vsel[x.id]=false);render()">Desmarcar todos</button></div>
+  <div class="mut" style="margin-top:6px">Total seleccionado: <b>${fmt(tot)}</b></div></div>
+  <div class="card scroll"><table><thead><tr><th></th><th>Vale</th><th>Fecha</th><th>Empleado</th><th class="n">Importe</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan=6 class="mut">No hay vales en ese rango.</td></tr>'}</tbody></table></div>`}
 function modalMov(i){
   const opts=['ctacte','sueldo','adicional','sac','vac','aj'].map(t=>`<option value="${t}">${TIPOS[t].l}</option>`).join('');
   modal(`<h3 style="margin-top:0">Otro movimiento</h3><div class="grid2"><div><label>Tipo</label><select id="m_t">${opts}</select></div>
@@ -429,13 +463,15 @@ async function confirmImp(){const r=S.imp;if(!confirm(`Importar ${r.nMovs} movim
 
 /* ---------- Impresión ---------- */
 function doPrint(html){$('#print').innerHTML=html;setTimeout(()=>window.print(),100)}
-function printVale(i,id){const e=S.emps[i],m=S.movs[i][id];
-  const one=lbl=>`<div class="vale"><div class="hd" style="display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px"><div><b>${EMPRESA}</b><br><span style="font-size:10pt">San Juan · ${lbl}</span></div>
+function valeHTML(i,id){const e=S.emps[i]||{},m=S.movs[i][id];
+  return `<div class="vale"><div class="hd" style="display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px"><div><b>${EMPRESA}</b><br><span style="font-size:10pt">San Juan</span></div>
   <div style="text-align:right"><span class="big">VALE N° ${String(m.vale).padStart(6,'0')}</span><br>Fecha: ${fD(m.f)}</div></div>
   <p>Recibí de <b>${EMPRESA}</b> la suma de <span class="big">${fmt(m.imp)}</span><br>(Son ${letras(m.imp)})<br>
-  en concepto de <b>ANTICIPO DE HABERES</b> correspondiente al mes de <b>${perLabel(m.per)}</b>, autorizando su descuento de mis haberes.${m.c?'<br>Detalle: '+esc(m.c):''}</p>
+  en concepto de <b>ANTICIPO DE HABERES</b>.${m.c?'<br>Detalle: '+esc(m.c):''}</p>
   <div class="firmas"><div>Firma del empleado</div><div>Aclaración: ${esc(e.nombre)}</div><div>DNI: ${esc(e.dni||'')}</div></div></div>`;
-  doPrint(one('ORIGINAL - Empresa')+one('DUPLICADO - Empleado'))}
+}
+function printVale(i,id){doPrint(valeHTML(i,id))}
+function printVales(list){if(!list.length)return alert('No hay vales seleccionados');doPrint(list.map(([i,id])=>valeHTML(i,id)).join(''))}
 function printCom(i,id){const e=S.emps[i],c=S.leg[i][id];
   doPrint(`<div class="doc"><div class="hd"><div><h2>${EMPRESA}</h2></div><div>San Juan, ${fDLargo(c.f)}</div></div>
   <p>Sr./Sra.: <b>${esc(e.nombre)}</b><br>DNI: ${esc(e.dni||'__________')}${e.legajo?' · Legajo N° '+esc(e.legajo):''}</p>
